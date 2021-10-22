@@ -5,7 +5,7 @@ import gzip
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Optional, Mapping, Callable
+from typing import List, Mapping, Callable
 from transformers import AutoConfig, AutoModelForTokenClassification, AutoTokenizer
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from transformers import get_linear_schedule_with_warmup
@@ -160,7 +160,7 @@ class BertTrainer:
                 self.model_path, num_hidden_layers=num_layers, num_labels=len(labels))
         )
 
-    def fit(self, data: List[str], eval_set: Optional[List[str]] = None) -> None:
+    def fit(self, data: List[str], eval_set: List[str]) -> None:
         grad_steps = 4
 
         if 'large' in self.model_path.split('-'):
@@ -173,12 +173,9 @@ class BertTrainer:
         train_loader = TextDataset(
             self.tokenizer, data, self.labels, TRUNCATE_LEN, True
         ).loader(batch_size)
-        if eval_set is not None:
-            val_loader = TextDataset(
-                self.tokenizer, eval_set, self.labels, TRUNCATE_LEN, False
-            ).loader(16)
-        else:
-            val_loader = None
+        val_loader = TextDataset(
+            self.tokenizer, eval_set, self.labels, TRUNCATE_LEN, False
+        ).loader(16)
 
         effective_batch_size = batch_size * grad_steps
         epoch_updates = (len(data) + effective_batch_size - 1) // effective_batch_size
@@ -205,7 +202,7 @@ class BertTrainer:
         )
         trainer.fit(model)
 
-    def save_corrector(self, path: str, export_type: Optional[str] = None) -> None:
+    def save_corrector(self, path: str, export_type: str) -> None:
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
 
