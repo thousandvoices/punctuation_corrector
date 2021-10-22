@@ -26,7 +26,7 @@ class CorrectorsTest(unittest.TestCase):
             predictions = corrector.correct([text.replace(' no', ', no') for text in texts])
             self.assertEqual(predictions, texts)
 
-    def test_bert(self):
+    def test_pytorch(self):
         trainer = BertTrainer(
             'DeepPavlov/rubert-base-cased-conversational',
             3,
@@ -36,7 +36,7 @@ class CorrectorsTest(unittest.TestCase):
         )
         self._test_trainer(trainer, 'pytorch')
 
-    def test_bert_cpu(self):
+    def test_onnx(self):
         trainer = BertTrainer(
             'DeepPavlov/rubert-base-cased-conversational',
             3,
@@ -45,3 +45,13 @@ class CorrectorsTest(unittest.TestCase):
             labels=[',']
         )
         self._test_trainer(trainer, 'onnx')
+
+    def test_onnx_quantized(self):
+        trainer = BertTrainer(
+            'DeepPavlov/rubert-base-cased-conversational',
+            3,
+            1,
+            {},
+            labels=[',']
+        )
+        self._test_trainer(trainer, 'onnx_quantized')

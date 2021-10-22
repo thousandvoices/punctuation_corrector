@@ -95,12 +95,21 @@ class LightningModel(pl.LightningModule):
         return [self.optimizer], [scheduler_config]
 
 
-def _save_pytorch(path: Path, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase) -> None:
+def _save_pytorch(
+        path: Path,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase) -> None:
+
     tokenizer.save_pretrained(path)
     model.save_pretrained(path)
 
 
-def _save_onnx(path: Path, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase) -> None:
+def _save_onnx(
+        path: Path,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        quantize_model: bool) -> None:
+
     _save_pytorch(path, model, tokenizer)
 
     with TemporaryDirectory() as temp_dir:
@@ -113,9 +122,10 @@ def _save_onnx(path: Path, model: PreTrainedModel, tokenizer: PreTrainedTokenize
             opset=11
         )
         optimized_path = optimize(temp_model_path)
-        quantized_path = quantize(optimized_path)
+        if quantize_model:
+            optimized_path = quantize(optimized_path)
         target_path = OnnxClassifier.onnx_model_path(path)
-        with open(quantized_path, 'rb') as src, gzip.open(target_path, 'wb') as dst:
+        with open(optimized_path, 'rb') as src, gzip.open(target_path, 'wb') as dst:
             shutil.copyfileobj(src, dst)
         os.remove(path / 'pytorch_model.bin')
 
@@ -123,7 +133,8 @@ def _save_onnx(path: Path, model: PreTrainedModel, tokenizer: PreTrainedTokenize
 class BertTrainer:
     EXPORT_FUNCTIONS = {
         'pytorch': _save_pytorch,
-        'onnx': _save_onnx
+        'onnx': lambda path, model, tokenizer: _save_onnx(path, model, tokenizer, False),
+        'onnx_quantized': lambda path, model, tokenizer: _save_onnx(path, model, tokenizer, True),
     }
 
     def __init__(

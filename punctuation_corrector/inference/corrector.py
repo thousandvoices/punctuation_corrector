@@ -21,6 +21,7 @@ def _load_pytorch_classifier() -> TokenClassifier:
 
 CORRECTOR_LOADERS = {
     'onnx': _load_onnx_classifier,
+    'onnx_quantized': _load_onnx_classifier,
     'pytorch': _load_pytorch_classifier
 }
 

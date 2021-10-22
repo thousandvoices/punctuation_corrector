@@ -51,7 +51,7 @@ class DefaultOutputFormatter(OutputFormatter):
             for alignment in Alignment:
                 labels = aligned_labels[alignment]
                 if len(labels) > 0:
-                    if alignment != Alignment.LEFT:
+                    if alignment != Alignment.LEFT and len(punctuation) == 0:
                         punctuation += ' '
                     punctuation += labels[0]
                     if alignment != Alignment.RIGHT:
