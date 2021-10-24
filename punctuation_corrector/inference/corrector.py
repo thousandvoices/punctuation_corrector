@@ -48,7 +48,7 @@ class Corrector:
         self._output_formatter = output_formatter
 
     @staticmethod
-    def _create_splits(text_len: int) -> List[Tuple]:
+    def _create_splits(text_len: int) -> List[Tuple[int, int, int, int]]:
         splits = []
 
         input_start = 0
