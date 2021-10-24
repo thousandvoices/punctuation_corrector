@@ -19,15 +19,15 @@ def _load_pytorch_classifier() -> TokenClassifier:
     return PytorchClassifier
 
 
-CORRECTOR_LOADERS = {
+CLASSIFIER_LOADERS = {
     'onnx': _load_onnx_classifier,
     'onnx_quantized': _load_onnx_classifier,
     'pytorch': _load_pytorch_classifier
 }
 
 
-def _create_class(classifier_name: str) -> TokenClassifier:
-    return CORRECTOR_LOADERS[classifier_name]()
+def _create_classifier(classifier_name: str) -> TokenClassifier:
+    return CLASSIFIER_LOADERS[classifier_name]()
 
 
 class Corrector:
@@ -105,7 +105,7 @@ class Corrector:
         )
 
         return cls(
-            _create_class(config['class'])(str(cached_path)),
+            _create_classifier(config['class'])(str(cached_path)),
             tokenizer,
             config['labels'],
             output_formatter

@@ -12,8 +12,8 @@ class EncodedText:
     end_offsets: List[int]
 
 
-def _clear_labels(labels: np.ndarray) -> np.ndarray:
-    return np.zeros(len(labels), dtype=np.float32)
+def _clear_labels(label_ids: List[int]) -> np.ndarray:
+    return np.zeros(len(label_ids), dtype=np.float32)
 
 
 def encode_punctuation(
