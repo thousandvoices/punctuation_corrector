@@ -1,7 +1,8 @@
 import json
+import numpy as np
 from pathlib import Path
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 from .token_classifier import TokenClassifier
 from .model_cache import ModelCache
@@ -32,6 +33,8 @@ def _create_classifier(classifier_name: str) -> TokenClassifier:
 
 class Corrector:
     MODEL_CACHE = ModelCache(Path.home() / '.cache' / 'punctuation_corrector')
+    MAX_LEN = 512
+    OVERLAP = 10
 
     def __init__(
             self,
@@ -44,15 +47,41 @@ class Corrector:
         self._labels = labels
         self._output_formatter = output_formatter
 
+    @staticmethod
+    def _create_splits(text_len: int) -> List[Tuple]:
+        splits = []
+
+        input_start = 0
+        input_end = 0
+        while input_end < text_len:
+            input_end = min(input_start + Corrector.MAX_LEN, text_len)
+            result_start = 0
+            if input_start > 0:
+                result_start += Corrector.OVERLAP
+
+            result_end = input_end - input_start
+            if input_end < text_len:
+                result_end -= Corrector.OVERLAP
+
+            splits.append((input_start, input_end, result_start, result_end))
+            input_start += Corrector.MAX_LEN - 2 * Corrector.OVERLAP
+
+        return splits
+
     def correct(self, texts: Iterable[str]) -> List[str]:
         results = []
         for text in texts:
             encoded_text = encode_punctuation(
                 self._tokenizer,
                 self._tokenizer.convert_tokens_to_ids(self._labels),
-                text,
-                512)
-            predicted_labels = self._token_classifier.predict(encoded_text.tokens)
+                text)
+
+            predicted_labels = []
+            splits = self._create_splits(len(encoded_text.tokens))
+            for input_start, input_end, result_start, result_end in splits:
+                result = self._token_classifier.predict(encoded_text.tokens[input_start:input_end])
+                predicted_labels.append(result[result_start:result_end])
+            predicted_labels = np.concatenate(predicted_labels, axis=0)
 
             previous_span_end = 0
             corrected_spans = []

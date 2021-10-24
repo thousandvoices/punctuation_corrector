@@ -19,13 +19,11 @@ def _clear_labels(label_ids: List[int]) -> np.ndarray:
 def encode_punctuation(
         tokenizer: PreTrainedTokenizerBase,
         label_ids: List[int],
-        text: str,
-        truncate_len: int) -> EncodedText:
+        text: str) -> EncodedText:
 
     encoded_text = tokenizer(
         text.lower(),
-        max_length=truncate_len,
-        truncation=True,
+        truncation=False,
         return_tensors='np',
         return_offsets_mapping=True)
 

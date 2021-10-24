@@ -29,10 +29,8 @@ class TextDataset(Dataset):
             tokenizer: PreTrainedTokenizerBase,
             texts: List[str],
             labels: List[str],
-            truncate_len: int,
             shuffle: bool) -> None:
 
-        self._truncate_len = truncate_len
         self._shuffle = shuffle
         self._texts = texts
         self._tokenizer = tokenizer
@@ -43,7 +41,7 @@ class TextDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
         encoded_text = encode_punctuation(
-            self._tokenizer, self._label_ids, self._texts[idx], self._truncate_len)
+            self._tokenizer, self._label_ids, self._texts[idx])
 
         return encoded_text.tokens, encoded_text.labels
 

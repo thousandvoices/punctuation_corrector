@@ -1,4 +1,4 @@
 set -e
 
-ROOT=`dirname "$0"`
-flake8 "$ROOT/punctuation_corrector" && python3 -m unittest discover "$ROOT/tests" || echo "Unit tests failed"
+cd `dirname "$0"`
+flake8 punctuation_corrector tests && python3 -m unittest discover tests || echo "Unit tests failed"

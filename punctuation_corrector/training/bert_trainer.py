@@ -39,7 +39,7 @@ class LightningModel(pl.LightningModule):
         return super().to(device, *args, **kwargs)
 
     def unpack_batch(self, batch):
-        return [tensor.to(self.default_device) for tensor in batch]
+        return [tensor.to(self.default_device)[:, :TRUNCATE_LEN] for tensor in batch]
 
     @staticmethod
     def collapse_sequence(x: np.ndarray) -> np.ndarray:
@@ -171,10 +171,10 @@ class BertTrainer:
             lr = 2e-5
 
         train_loader = TextDataset(
-            self.tokenizer, data, self.labels, TRUNCATE_LEN, True
+            self.tokenizer, data, self.labels, True
         ).loader(batch_size)
         val_loader = TextDataset(
-            self.tokenizer, eval_set, self.labels, TRUNCATE_LEN, False
+            self.tokenizer, eval_set, self.labels, False
         ).loader(16)
 
         effective_batch_size = batch_size * grad_steps
