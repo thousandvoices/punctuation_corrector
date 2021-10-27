@@ -12,7 +12,7 @@ def read_fb2_collection(path: Path) -> List[str]:
             try:
                 tree = etree.parse(f)
                 if len(tree.xpath("//*[name()='publisher']")) > 0:
-                    result.extend(tree.xpath("//*[name()='p']/text()"))
+                    result.extend([str(text) for text in tree.xpath("//*[name()='p']/text()")])
             except Exception:
                 pass
 

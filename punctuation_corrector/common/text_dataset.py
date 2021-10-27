@@ -25,7 +25,7 @@ def _collate_examples(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
     texts, labels, case_labels = list(zip(*batch))
-    
+
     token_tensor = torch.from_numpy(_collate_tensors(texts))
     label_tensor = torch.from_numpy(_collate_tensors(labels))
     case_tensor = torch.from_numpy(_collate_tensors(case_labels))
