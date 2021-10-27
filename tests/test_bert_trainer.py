@@ -10,20 +10,25 @@ NUM_REPEATS = 500
 
 class CorrectorsTest(unittest.TestCase):
     def _test_trainer(self, trainer, export_type):
-        texts = ['comma, here', 'and nothing']
+        texts = ['comma, here', 'AND Nothing']
         trainer.fit(texts * NUM_REPEATS, eval_set=texts)
 
         with TemporaryDirectory() as temp_dir:
             trainer.save_corrector(temp_dir, export_type)
             corrector = Corrector.load(temp_dir)
 
-            train_predictions = corrector.correct(texts)
+            if trainer._predict_case:
+                input_texts = [text.lower() for text in texts]
+            else:
+                input_texts = texts
+
+            train_predictions = corrector.correct(input_texts)
             self.assertEqual(train_predictions, texts)
 
-            predictions = corrector.correct([text.replace(',', ' ') for text in texts])
+            predictions = corrector.correct([text.replace(',', ' ') for text in input_texts])
             self.assertEqual(predictions, texts)
 
-            predictions = corrector.correct([text.replace(' no', ', no') for text in texts])
+            predictions = corrector.correct([text.replace(' no', ', no') for text in input_texts])
             self.assertEqual(predictions, texts)
 
     def test_pytorch(self):
@@ -31,8 +36,8 @@ class CorrectorsTest(unittest.TestCase):
             'DeepPavlov/rubert-base-cased-conversational',
             3,
             1,
-            {'test': lambda y_true, y_pred: 0},
-            labels=[',']
+            [','],
+            True
         )
         self._test_trainer(trainer, 'pytorch')
 
@@ -41,8 +46,8 @@ class CorrectorsTest(unittest.TestCase):
             'DeepPavlov/rubert-base-cased-conversational',
             3,
             1,
-            {},
-            labels=[',']
+            [','],
+            False
         )
         self._test_trainer(trainer, 'onnx')
 
@@ -51,7 +56,7 @@ class CorrectorsTest(unittest.TestCase):
             'DeepPavlov/rubert-base-cased-conversational',
             3,
             1,
-            {},
-            labels=[',']
+            [','],
+            False
         )
         self._test_trainer(trainer, 'onnx_quantized')

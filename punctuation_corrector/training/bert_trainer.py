@@ -5,13 +5,15 @@ import gzip
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Mapping, Callable
+from typing import List
 from transformers import AutoConfig, AutoModelForTokenClassification, AutoTokenizer
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from transformers import get_linear_schedule_with_warmup
 from transformers.convert_graph_to_onnx import convert, optimize, quantize
+from sklearn.metrics import f1_score
 import pytorch_lightning as pl
 
+from ..common.preprocessing import TokenCase, parse_output
 from ..common.text_dataset import TextDataset
 from ..inference.corrector import Corrector
 from ..inference.onnx_classifier import OnnxClassifier
@@ -21,18 +23,28 @@ TRUNCATE_LEN = 512
 
 
 class LightningModel(pl.LightningModule):
-    def __init__(self, base_model, train_loader, val_loader, lr, num_updates, metrics) -> None:
+    def __init__(
+            self,
+            base_model,
+            train_loader,
+            val_loader,
+            predict_case,
+            labels,
+            lr,
+            num_updates) -> None:
         super().__init__()
 
         self.base_model = base_model
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.predict_case = predict_case
+        self.labels = labels
         self.num_updates = num_updates
         self.criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
+        self.case_criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
         self.default_device = 'cpu'
         self.lr = lr
-        self.metrics = metrics
 
     def to(self, device, *args, **kwargs):
         self.default_device = device
@@ -49,30 +61,49 @@ class LightningModel(pl.LightningModule):
         return self.base_model.forward(data, attention_mask=data > 0)[0]
 
     def training_step(self, batch, batch_idx):
-        data, target = self.unpack_batch(batch)
+        data, target, case = self.unpack_batch(batch)
         result = self.forward(data)
-        loss = self.criterion.forward(result, target)
+
+        result = parse_output(result, self.predict_case)
+        loss = self.criterion.forward(result.labels, target)
+
+        if result.case_labels is not None:
+            loss += self.case_criterion.forward(
+                result.case_labels.reshape(-1, len(TokenCase)), case.reshape(-1))
+
         self.log('loss', loss)
 
         return {'loss': loss}
 
     def validation_step(self, batch, batch_idx):
-        data, target = self.unpack_batch(batch)
+        data, target, case = self.unpack_batch(batch)
 
         result = self.forward(data)
-        y_true = target.detach().cpu().numpy().astype(np.int32)
-        y_pred = result.detach().cpu().numpy()
+        true_labels = target.detach().cpu().numpy().astype(np.int32)
+        true_case = case.detach().cpu().numpy().astype(np.int32)
+        predicted = result.detach().cpu().numpy()
 
-        return {'y_true': y_true, 'y_pred': y_pred}
+        return {'labels': true_labels, 'case': true_case, 'predicted': predicted}
 
     def validation_epoch_end(self, outputs):
-        y_true = np.concatenate([self.collapse_sequence(x['y_true']) for x in outputs], axis=0)
-        y_pred = np.concatenate([self.collapse_sequence(x['y_pred']) for x in outputs], axis=0)
-        scores = {
-            name: metric(y_true, y_pred) for name, metric in self.metrics.items()
-        }
-        message = ' '.join(f'{metric}: {score:.5f}' for metric, score in scores.items())
-        print(message)
+        labels = np.concatenate([self.collapse_sequence(x['labels']) for x in outputs], axis=0)
+        case = np.concatenate([x['case'].flatten() for x in outputs], axis=0)
+        predicted = np.concatenate(
+            [self.collapse_sequence(x['predicted']) for x in outputs], axis=0)
+        predicted = parse_output(predicted, self.predict_case)
+
+        messages = []
+        for idx, label in enumerate(self.labels):
+            score = f1_score(labels[:, idx], predicted.labels[:, idx] > 0)
+            messages.append(f'f1({label}): {score:.5f}')
+
+        if self.predict_case:
+            predicted_cases = np.argmax(predicted.case_labels, axis=-1)
+            for case_class in TokenCase:
+                score = f1_score(case == case_class.value, predicted_cases == case_class.value)
+                messages.append(f'f1({case_class.name}): {score:.5f}')
+
+        print(' '.join(messages))
 
     def train_dataloader(self):
         return self.train_loader
@@ -142,28 +173,30 @@ class BertTrainer:
             model_path: str,
             num_layers: int,
             num_epochs: int,
-            metrics: Mapping[str, Callable[[np.ndarray, np.ndarray], float]],
-            labels: List[str]) -> None:
+            labels: List[str],
+            predict_case: bool) -> None:
 
-        self.labels = labels
-        self.model_path = model_path
-        self.num_epochs = num_epochs
-        self.metrics = metrics
+        self._labels = labels
+        self._model_path = model_path
+        self._num_epochs = num_epochs
+        self._predict_case = predict_case
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path,
+        num_labels = len(labels) if not predict_case else len(labels) + len(TokenCase)
+
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            self._model_path,
             do_lower_case=False
         )
-        self.model = AutoModelForTokenClassification.from_pretrained(
-            self.model_path,
+        self._model = AutoModelForTokenClassification.from_pretrained(
+            self._model_path,
             config=AutoConfig.from_pretrained(
-                self.model_path, num_hidden_layers=num_layers, num_labels=len(labels))
+                self._model_path, num_hidden_layers=num_layers, num_labels=num_labels)
         )
 
     def fit(self, data: List[str], eval_set: List[str]) -> None:
         grad_steps = 4
 
-        if 'large' in self.model_path.split('-'):
+        if 'large' in self._model_path.split('-'):
             batch_size = 1
             lr = 5e-6
         else:
@@ -171,23 +204,24 @@ class BertTrainer:
             lr = 2e-5
 
         train_loader = TextDataset(
-            self.tokenizer, data, self.labels, True
+            self._tokenizer, data, self._labels, True
         ).loader(batch_size)
         val_loader = TextDataset(
-            self.tokenizer, eval_set, self.labels, False
+            self._tokenizer, eval_set, self._labels, False
         ).loader(16)
 
         effective_batch_size = batch_size * grad_steps
         epoch_updates = (len(data) + effective_batch_size - 1) // effective_batch_size
-        num_updates = self.num_epochs * epoch_updates
+        num_updates = self._num_epochs * epoch_updates
 
         model = LightningModel(
-            self.model,
+            self._model,
             train_loader,
             val_loader,
+            self._predict_case,
+            self._labels,
             lr,
-            num_updates,
-            self.metrics
+            num_updates
         ).to('cuda')
 
         trainer = pl.Trainer(
@@ -206,9 +240,10 @@ class BertTrainer:
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
 
-        self.EXPORT_FUNCTIONS[export_type](path, self.model, self.tokenizer)
+        self.EXPORT_FUNCTIONS[export_type](path, self._model, self._tokenizer)
         Corrector.save_metadata(
             export_type,
-            self.labels,
+            self._labels,
+            self._predict_case,
             path
         )

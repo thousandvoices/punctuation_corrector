@@ -7,7 +7,7 @@ from typing import Iterable, List, Tuple
 from .token_classifier import TokenClassifier
 from .model_cache import ModelCache
 from .output_formatter import OutputFormatter, DefaultOutputFormatter
-from ..common.preprocessing import encode_punctuation
+from ..common.preprocessing import encode_punctuation, parse_output
 
 
 def _load_onnx_classifier() -> TokenClassifier:
@@ -41,10 +41,12 @@ class Corrector:
             token_classifier: TokenClassifier,
             tokenizer: PreTrainedTokenizerBase,
             labels: List[str],
+            predict_case: bool,
             output_formatter: OutputFormatter) -> None:
         self._token_classifier = token_classifier
         self._tokenizer = tokenizer
         self._labels = labels
+        self._predict_case = predict_case
         self._output_formatter = output_formatter
 
     @staticmethod
@@ -77,35 +79,45 @@ class Corrector:
                 text)
 
             predicted_labels = []
+            predicted_case = []
             splits = self._create_splits(len(encoded_text.tokens))
             for input_start, input_end, result_start, result_end in splits:
                 result = self._token_classifier.predict(encoded_text.tokens[input_start:input_end])
-                predicted_labels.append(result[result_start:result_end])
+                result = parse_output(result[result_start:result_end], self._predict_case)
+                predicted_labels.append(result.labels)
+                predicted_case.append(result.case_labels)
+
             predicted_labels = np.concatenate(predicted_labels, axis=0)
+            if self._predict_case:
+                predicted_case = np.concatenate(predicted_case, axis=0)
+            else:
+                predicted_case = [None] * len(encoded_text.tokens)
 
             previous_span_end = 0
             corrected_spans = []
             spans = zip(
                 predicted_labels,
+                predicted_case,
                 encoded_text.labels,
                 encoded_text.start_offsets,
                 encoded_text.end_offsets)
 
-            for predicted_labels, original_labels, start_offset, end_offset in spans:
-                start_offset = max(start_offset, previous_span_end)
-                end_offset = max(end_offset, previous_span_end)
+            for predicted_labels, predicted_case, original_labels, span_start, span_end in spans:
+                span_start = max(span_start, previous_span_end)
+                span_end = max(span_end, previous_span_end)
 
-                original_punctuation = text[previous_span_end:start_offset]
-                original_span = text[start_offset:end_offset]
+                original_punctuation = text[previous_span_end:span_start]
+                original_span = text[span_start:span_end]
                 corrected_span = self._output_formatter.format(
                     self._labels,
                     predicted_labels,
+                    predicted_case,
                     original_punctuation,
                     original_span,
                     original_labels)
 
                 corrected_spans.append(corrected_span)
-                previous_span_end = end_offset
+                previous_span_end = span_end
 
             results.append(''.join(corrected_spans))
 
@@ -116,8 +128,14 @@ class Corrector:
         return path / 'punctuation_corrector.json'
 
     @classmethod
-    def save_metadata(cls, class_name: str, labels: List[str], path: Path) -> None:
-        metadata = {'class': class_name, 'labels': labels}
+    def save_metadata(
+            cls,
+            class_name: str,
+            labels: List[str],
+            predict_case: bool,
+            path: Path) -> None:
+
+        metadata = {'class': class_name, 'labels': labels, 'predict_case': predict_case}
         with open(cls._metadata_path(path), 'w') as f:
             json.dump(metadata, f, indent=4)
 
@@ -136,6 +154,7 @@ class Corrector:
         return cls(
             _create_classifier(config['class'])(str(cached_path)),
             tokenizer,
-            config['labels'],
+            config.get('labels', []),
+            config.get('predict_case', False),
             output_formatter
         )

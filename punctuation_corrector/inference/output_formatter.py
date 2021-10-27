@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 import numpy as np
+
+from ..common.preprocessing import TokenCase
 
 
 class OutputFormatter(ABC):
@@ -11,6 +13,7 @@ class OutputFormatter(ABC):
     def format(
             labels: List[str],
             predicted_scores: np.ndarray,
+            predicted_case: Optional[np.ndarray],
             original_punctuation: str,
             original_span: str,
             original_scores: np.ndarray) -> str:
@@ -34,6 +37,7 @@ class DefaultOutputFormatter(OutputFormatter):
     def format(
             labels: List[str],
             predicted_scores: np.ndarray,
+            predicted_case: Optional[np.ndarray],
             original_punctuation: str,
             original_span: str,
             original_scores: np.ndarray) -> str:
@@ -60,4 +64,14 @@ class DefaultOutputFormatter(OutputFormatter):
             if len(punctuation) == 0:
                 punctuation = ' '
 
-        return punctuation + original_span
+        span = original_span
+        if predicted_case is not None:
+            predicted_case = np.argmax(predicted_case)
+            if predicted_case == TokenCase.LOWER.value:
+                span = span.lower()
+            elif predicted_case == TokenCase.CAPITALIZE.value:
+                span = span.capitalize()
+            else:
+                span = span.upper()
+
+        return punctuation + span
