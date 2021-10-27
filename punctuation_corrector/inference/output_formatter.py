@@ -25,10 +25,12 @@ class Alignment(Enum):
     LEFT = 0
     CENTER = 1
     RIGHT = 2
+    DASH = 3
 
 
 MARK_ALIGNMENTS = defaultdict(lambda: Alignment.LEFT, {
-    '—': Alignment.CENTER
+    '—': Alignment.CENTER,
+    '-': Alignment.DASH
 })
 
 
@@ -47,21 +49,26 @@ class DefaultOutputFormatter(OutputFormatter):
             label_scores = zip(labels, predicted_scores)
 
             aligned_labels = defaultdict(list)
-            for label, score in sorted(label_scores, key=lambda x: x[1], reverse=True):
-                if score > 0.5:
-                    aligned_labels[MARK_ALIGNMENTS[label]].append(label)
+            label_scores = [(label, score) for label, score in label_scores if score > 0.5]
+            sorted_scores = sorted(label_scores, key=lambda x: x[1], reverse=True)
 
-            punctuation = ''
-            for alignment in Alignment:
-                labels = aligned_labels[alignment]
-                if len(labels) > 0:
-                    if alignment != Alignment.LEFT and len(punctuation) == 0:
-                        punctuation += ' '
-                    punctuation += labels[0]
-                    if alignment != Alignment.RIGHT:
-                        punctuation += ' '
+            if len(sorted_scores) > 0:
+                if MARK_ALIGNMENTS[sorted_scores[0][0]] == Alignment.DASH:
+                    punctuation = sorted_scores[0][0]
+                else:
+                    for label, score in sorted_scores:
+                        aligned_labels[MARK_ALIGNMENTS[label]].append(label)
 
-            if len(punctuation) == 0:
+                    punctuation = ''
+                    for alignment in Alignment:
+                        labels = aligned_labels[alignment]
+                        if len(labels) > 0:
+                            if alignment != Alignment.LEFT and len(punctuation) == 0:
+                                punctuation += ' '
+                            punctuation += labels[0]
+                            if alignment != Alignment.RIGHT:
+                                punctuation += ' '
+            else:
                 punctuation = ' '
 
         span = original_span
