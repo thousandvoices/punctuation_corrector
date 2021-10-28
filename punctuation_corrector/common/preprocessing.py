@@ -69,6 +69,7 @@ def encode_punctuation(
         else:
             active_labels[label_ids.index(token)] = 1
 
+    fixed_offsets[-1] = (len(text), len(text))
     start_offsets, end_offsets = zip(*fixed_offsets)
     return EncodedText(
         np.int64(fixed_tokens),

@@ -5,12 +5,12 @@ from punctuation_corrector.training import BertTrainer
 from punctuation_corrector.inference import Corrector
 
 
-NUM_REPEATS = 500
+NUM_REPEATS = 1000
 
 
 class CorrectorsTest(unittest.TestCase):
     def _test_trainer(self, trainer, export_type):
-        texts = ['comma, here', 'AND Nothing']
+        texts = ['comma, here, ', 'AND Nothing']
         trainer.fit(texts * NUM_REPEATS, eval_set=texts)
 
         with TemporaryDirectory() as temp_dir:
@@ -25,7 +25,7 @@ class CorrectorsTest(unittest.TestCase):
             train_predictions = corrector.correct(input_texts)
             self.assertEqual(train_predictions, texts)
 
-            predictions = corrector.correct([text.replace(',', ' ') for text in input_texts])
+            predictions = corrector.correct([text.replace(',', '') for text in input_texts])
             self.assertEqual(predictions, texts)
 
             predictions = corrector.correct([text.replace(' no', ', no') for text in input_texts])

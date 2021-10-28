@@ -103,9 +103,6 @@ class Corrector:
                 encoded_text.end_offsets)
 
             for predicted_labels, predicted_case, original_labels, span_start, span_end in spans:
-                span_start = max(span_start, previous_span_end)
-                span_end = max(span_end, previous_span_end)
-
                 original_punctuation = text[previous_span_end:span_start]
                 original_span = text[span_start:span_end]
                 corrected_span = self._output_formatter.format(
