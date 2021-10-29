@@ -250,7 +250,7 @@ class BertTrainer:
 
     @staticmethod
     def load(path: str):
-        config = Corrector.load_metadata(path)
+        config = Corrector.load_metadata(Path(path))
         if config['class'] != 'pytorch':
             raise AssertionError('Only pytorch models can be loaded for finetuning')
 

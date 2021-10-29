@@ -57,3 +57,26 @@ class CorrectorsTest(unittest.TestCase):
             False
         )
         self._test_trainer(trainer, 'onnx_quantized')
+
+    def test_saveload(self):
+        trainer = BertTrainer(
+            'DeepPavlov/rubert-base-cased-conversational',
+            3,
+            [','],
+            False
+        )
+
+        texts = ['comma here', 'and nothing']
+
+        with TemporaryDirectory() as temp_dir:
+            trainer.save_corrector(temp_dir, 'pytorch')
+            corrector = Corrector.load(temp_dir)
+            original = corrector.correct(texts)
+
+            finetuner = BertTrainer.load(temp_dir)
+            with TemporaryDirectory() as finetuned_dir:
+                finetuner.save_corrector(finetuned_dir, 'pytorch')
+                finetuned_corrector = Corrector.load(finetuned_dir)
+                finetuned = finetuned_corrector.correct(texts)
+
+        self.assertEqual(original, finetuned)

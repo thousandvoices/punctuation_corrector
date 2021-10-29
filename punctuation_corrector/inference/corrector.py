@@ -144,7 +144,7 @@ class Corrector:
             json.dump(metadata, f, indent=4)
 
     @classmethod
-    def load_metadata(cls, path: str) -> dict:
+    def load_metadata(cls, path: Path) -> dict:
         with open(cls._metadata_path(path)) as f:
             return json.load(f)
 
