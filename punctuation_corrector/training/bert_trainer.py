@@ -172,13 +172,12 @@ class BertTrainer:
             self,
             model_path: str,
             num_layers: int,
-            num_epochs: int,
             labels: List[str],
             predict_case: bool) -> None:
 
-        self._labels = labels
         self._model_path = model_path
-        self._num_epochs = num_epochs
+        self._num_layers = num_layers
+        self._labels = labels
         self._predict_case = predict_case
 
         num_labels = len(labels) if not predict_case else len(labels) + len(TokenCase)
@@ -193,7 +192,7 @@ class BertTrainer:
                 self._model_path, num_hidden_layers=num_layers, num_labels=num_labels)
         )
 
-    def fit(self, data: List[str], eval_set: List[str]) -> None:
+    def fit(self, data: List[str], eval_set: List[str], num_epochs: int) -> None:
         grad_steps = 4
 
         if 'large' in self._model_path.split('-'):
@@ -212,7 +211,7 @@ class BertTrainer:
 
         effective_batch_size = batch_size * grad_steps
         epoch_updates = (len(data) + effective_batch_size - 1) // effective_batch_size
-        num_updates = self._num_epochs * epoch_updates
+        num_updates = num_epochs * epoch_updates
 
         model = LightningModel(
             self._model,
@@ -245,5 +244,14 @@ class BertTrainer:
             export_type,
             self._labels,
             self._predict_case,
+            self._num_layers,
             path
         )
+
+    @staticmethod
+    def load(path: str):
+        config = Corrector.load_metadata(path)
+        if config['class'] != 'pytorch':
+            raise AssertionError('Only pytorch models can be loaded for finetuning')
+
+        return BertTrainer(path, config['num_layers'], config['labels'], config['predict_case'])

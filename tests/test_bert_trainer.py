@@ -11,7 +11,7 @@ NUM_REPEATS = 1000
 class CorrectorsTest(unittest.TestCase):
     def _test_trainer(self, trainer, export_type):
         texts = ['comma, here, ', 'AND Nothing']
-        trainer.fit(texts * NUM_REPEATS, eval_set=texts)
+        trainer.fit(texts * NUM_REPEATS, eval_set=texts, num_epochs=1)
 
         with TemporaryDirectory() as temp_dir:
             trainer.save_corrector(temp_dir, export_type)
@@ -35,7 +35,6 @@ class CorrectorsTest(unittest.TestCase):
         trainer = BertTrainer(
             'DeepPavlov/rubert-base-cased-conversational',
             3,
-            1,
             [','],
             True
         )
@@ -45,7 +44,6 @@ class CorrectorsTest(unittest.TestCase):
         trainer = BertTrainer(
             'DeepPavlov/rubert-base-cased-conversational',
             3,
-            1,
             [','],
             False
         )
@@ -55,7 +53,6 @@ class CorrectorsTest(unittest.TestCase):
         trainer = BertTrainer(
             'DeepPavlov/rubert-base-cased-conversational',
             3,
-            1,
             [','],
             False
         )

@@ -130,18 +130,28 @@ class Corrector:
             class_name: str,
             labels: List[str],
             predict_case: bool,
+            num_layers: int,
             path: Path) -> None:
 
-        metadata = {'class': class_name, 'labels': labels, 'predict_case': predict_case}
+        metadata = {
+            'class': class_name,
+            'labels': labels,
+            'predict_case': predict_case,
+            'num_layers': num_layers
+        }
+
         with open(cls._metadata_path(path), 'w') as f:
             json.dump(metadata, f, indent=4)
 
     @classmethod
+    def load_metadata(cls, path: str) -> dict:
+        with open(cls._metadata_path(path)) as f:
+            return json.load(f)
+
+    @classmethod
     def load(cls, path: str, output_formatter: OutputFormatter = DefaultOutputFormatter()):
         cached_path = cls.MODEL_CACHE.cached_path(path)
-
-        with open(cls._metadata_path(cached_path)) as f:
-            config = json.load(f)
+        config = cls.load_metadata(cached_path)
 
         tokenizer = AutoTokenizer.from_pretrained(
             cached_path,
